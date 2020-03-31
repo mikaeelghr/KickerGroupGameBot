@@ -1,6 +1,25 @@
 from Models.Card import all_cards
 
 max_len = 4
+max_card_len = 3
+
+
+def turn_to_2d_array_first_method(array):
+    answer = []
+    while len(array) >= max_len:
+        size = max_card_len
+        in_while_array = []
+        for i in range(size - 1, -1, -1):
+            in_while_array.append(array[i])
+            array.pop(i)
+        answer.append(in_while_array)
+    if len(array) > 0:
+        in_while_array = []
+        for i in range(len(array) - 1, -1, -1):
+            in_while_array.append(array[i])
+            array.pop(i)
+        answer.append(in_while_array)
+    return answer
 
 
 def turn_to_2d_array(array):
@@ -24,5 +43,5 @@ def get_query_data(command_type, command_name, data, game):
 def get_cards_description():
     description = 'توضیحات کارت ها:\n'
     for card in all_cards:
-        description += '**'+card.name+'**' + ': ' + card.description + '\n\n'
+        description += '**' + card.name + '**' + ': ' + card.description + '\n\n'
     return description

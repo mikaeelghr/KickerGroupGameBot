@@ -32,6 +32,13 @@ class ActiveCard:
             return self.card.name + ' به ' + game.players[
                 self.owner_player_id].first_name + ' در دست شماره ' + str(self.sold_at_turn) + '\n'
 
+    def get_general_description_for_owner(self, game):
+        if self.deleted(game):
+            return ''
+        else:
+            return self.card.name + ' از ' + game.players[
+                self.owner_player_id].first_name + ' در دست شماره ' + str(self.sold_at_turn) + '\n'
+
 
 def valid_list_of_sold_card(turn_number: int, game, active_cards):
     vote_sum = [0] * Card.maximum_turns_count

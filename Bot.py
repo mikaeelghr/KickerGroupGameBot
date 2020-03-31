@@ -1,3 +1,4 @@
+import copy
 import os
 import threading
 import time
@@ -10,23 +11,20 @@ from Models.Game import Game
 from Models.Player import Player
 import Messages
 from Models.StaticMethods import turn_to_2d_array, get_query_data
-
+'''
 proxy = 'http://127.0.0.1:41177/'
 
 os.environ['http_proxy'] = proxy
 os.environ['HTTP_PROXY'] = proxy
 os.environ['https_proxy'] = proxy
 os.environ['HTTPS_PROXY'] = proxy
+'''
 
 TOKEN = '1107549294:AAHwx42GH_pnGtD3r9K6KvDiOOwvRJThYkY'
 updater = Updater(TOKEN, use_context=True)
 
 bot = telegram.Bot(token=TOKEN)
-game = Game(-1001390724742)
-
-
-for i in range(0, 7):
-    game.add_player(Player(i, "user " + str(i), fake=True))
+game = Game(-1001279873630)
 
 
 def send_to_group(message):
@@ -44,7 +42,8 @@ def start(update: telegram.Update, context: telegram.ext.CallbackContext):
         Messages.send_message(context.bot, update.effective_chat.id, Messages.SEND_START_ON_GROUP_ERROR)
         return
     response = bot.get_chat_member(chat_id=game.group_id, user_id=update.effective_user.id)
-    if not response.status == 'member' and not response.status == 'creator':
+    print(response.status)
+    if not response.status == 'member' and not response.status == 'creator' and not response.status == 'restricted':
         Messages.send_message(context.bot, update.effective_chat.id,
                               Messages.SEND_START_WHEN_IS_NOT_JOINED_ON_GROUP_ERROR)
         return
@@ -98,7 +97,6 @@ def suggest_card_select_card(update, context):
             text=Messages.SUGGEST_CARD_TEXT,
             reply_markup=reply_markup
         )
-        query.answer('ok')
     except Exception as e:
         print(e)
         query.answer('خطا:' + str(e))
@@ -123,7 +121,6 @@ def suggest_card_select_player(update, context):
             text=Messages.SUGGEST_CARD_TEXT,
             reply_markup=reply_markup
         )
-        query.answer('ok')
     except Exception as e:
         print(e)
         query.answer('خطا:' + str(e))
@@ -166,10 +163,9 @@ def vote_select_player(update, context):
             player.selected_players_on_this_turn.append(selected_id)
         reply_markup = player.get_vote_inline_keyboard(game)
         query.edit_message_text(
-            text=Messages.VOTE_TEXT,
+            text=Messages.VOTE_TEXT + ', وزن رای شما در این دست: ' + str(player.get_vote_weight(game)),
             reply_markup=reply_markup
         )
-        query.answer('ok')
     except Exception as e:
         print(e)
         query.answer('خطا:' + str(e))
@@ -177,6 +173,14 @@ def vote_select_player(update, context):
             text="deleted message",
             reply_markup=None
         )
+
+
+game_started = False
+
+
+def start_game(update, context):
+    global game_started
+    game_started = True
 
 
 updater.dispatcher.add_handler(CallbackQueryHandler(suggest_card_select_card,
@@ -197,6 +201,7 @@ updater.dispatcher.add_handler(CallbackQueryHandler(vote_select_player,
 
 updater.dispatcher.add_handler(CommandHandler('say', say))
 updater.dispatcher.add_handler(CommandHandler('start', start))
+updater.dispatcher.add_handler(CommandHandler('st99', start_game))
 
 
 # updater.dispatcher.add_handler(CommandHandler('get_players_can_vote', get_players_can_vote))
@@ -209,8 +214,9 @@ def receive_group_messages(update: telegram.Update, context: telegram.ext.Callba
 
 
 def run_game():
-    while len(game.players) < 8:
+    while not game_started:
         time.sleep(10)
+    all_players = copy.deepcopy(game.players)
     while len(game.players) > 1:
         send_to_group(" دست " + str(game.turn_number) + " شروع شد!")
         game.send_suggest_card_messages(bot)
@@ -228,6 +234,9 @@ def run_game():
     for player in game.players.values():
         send_to_group("" + str(player.first_name) + "\n" + " برنده شدی!")
         send_to_group("🥳")
+    for player in all_players.values():
+        bot.restrict_chat_member(chat_id=game.group_id, user_id=player.real_id,
+                                 permissions=telegram.ChatPermissions(can_send_messages=True))
 
 
 th = threading.Thread(target=run_game)

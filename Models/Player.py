@@ -1,13 +1,18 @@
 import copy
+import logging
 
+import telegram
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup
 
 from Models.ActiveCard import ActiveCard, valid_list_of_sold_card
 from Models.Card import Card, all_cards
 from Models.FriendCard import FriendCard
-from Models.StaticMethods import turn_to_2d_array, get_query_data
+from Models.StaticMethods import turn_to_2d_array, get_query_data, turn_to_2d_array_first_method
 from Models.TurnCard import TurnCard
 import Messages
+
+logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+                    level=logging.INFO)
 
 
 class Player:
@@ -34,8 +39,14 @@ class Player:
         self.selected_suggested_players_for_card_id = []
 
     def kick(self, bot, game):
-        Messages.send_message(bot, self.real_id, Messages.YOU_LOSE)
-        bot.kick_chat_member(game.group_id, self.real_id)
+        try:
+            Messages.send_message(bot, self.real_id, Messages.YOU_LOSE)
+            Messages.send_message(bot, game.group_id, "بازیکن " + self.first_name + " از بازی حذف شد")
+            bot.restrict_chat_member(chat_id=game.group_id, user_id=self.real_id,
+                                     permissions=telegram.ChatPermissions(can_send_messages=False))
+            # bot.kick_chat_member(game.group_id, self.real_id)
+        except Exception as e:
+            print(e)
 
     def send_suggest_card_message(self, bot, game):
         reply_markup = self.get_suggest_card_inline_keyboard(game)
@@ -56,9 +67,21 @@ class Player:
         text = Messages.SOLD_CARD_FIRST_LINE
         cards = self.sold_cards
         for active_card in cards:
-            text += active_card.get_general_description_for_seller(game)
+            if not active_card.deleted(game):
+                text += active_card.get_general_description_for_seller(game)
         if len(cards) == 0:
             text = Messages.NO_SOLD_CARDS
+        bot.send_message(chat_id=self.real_id, text=text)
+
+    def send_owner_cards_message(self, bot, game):
+        text = Messages.OWNER_CARD_FIRST_LINE
+        cards = self.sold_cards
+        for player in game.players.values():
+            for active_card in player.suggested_cards:
+                if active_card.owner_player_id == self.id and not active_card.deleted(game):
+                    text += active_card.get_general_description_for_owner(game)
+        if len(cards) == 0:
+            text = Messages.NO_OWNER_CARDS
         bot.send_message(chat_id=self.real_id, text=text)
 
     def send_vote_message(self, bot, game):
@@ -111,15 +134,14 @@ class Player:
         card_not_selected = True
         cards = self.get_cards_can_suggest(game)
         for card in cards:
-            print(card.id)
-            button_text = str(card.id)
+            button_text = str(card.name)
             if self.selected_card_id == card.id:
                 button_text += Messages.SELECT_TEXT
                 card_not_selected = False
             buttons.append(InlineKeyboardButton(text=button_text,
                                                 callback_data=get_query_data(Messages.SUGGEST_CARD,
                                                                              Messages.SELECT_CARD, card.id, game)))
-        buttons2d = turn_to_2d_array(buttons)
+        buttons2d = turn_to_2d_array_first_method(buttons)
         buttons = []
         if card_not_selected:
             self.selected_card_id = None
@@ -199,7 +221,6 @@ class Player:
         for player_id, player in game.players.items():
             if player_id != self.id:
                 active_cards = copy.deepcopy(self.sold_cards)
-                print(active_cards)
                 self.vote_effect_on_sold_cards(player_id, active_cards, game)
                 if valid_list_of_sold_card(game.turn_number + 1, game, active_cards):
                     players_can_vote.append(player)
@@ -258,14 +279,10 @@ class Player:
             if bought:
                 active_card.buy()
                 self.sold_cards.append(active_card)
+
+    def start_new_turn(self):
         self.suggested_cards = []
         self.selected_players_on_this_turn = []
         self.total_collected_votes += self.collected_votes_in_this_turn
         self.collected_votes_in_this_turn = 0
         self.collected_player_votes_in_this_turn = []
-        remove_list = []
-        for card in self.sold_cards:
-            if card.deleted(game):
-                remove_list.append(card)
-        for card in remove_list:
-            self.sold_cards.remove(card)

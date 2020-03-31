@@ -74,10 +74,18 @@ class Game:
     def end_turn(self, bot):
         for player_id, player in self.players.items():
             player.end_turn(self)
-        voted_player = self.get_voted_player()
-        print("Player " + str(voted_player.id) + " removed by game")
-        self.removed_players.append(voted_player.id)
         self.send_turn_result(bot)
+        for player_id, player in self.players.items():
+            player.start_new_turn()
+        for player in self.players.values():
+            remove_list = []
+            for card in player.sold_cards:
+                if card.deleted(self):
+                    remove_list.append(card)
+            for card in remove_list:
+                player.sold_cards.remove(card)
+        voted_player = self.get_voted_player()
+        self.removed_players.append(voted_player.id)
 
     def start_vote_time(self, bot):
         self.vote_time = True
@@ -89,7 +97,6 @@ class Game:
             player.send_vote_message(bot, self)
 
     def start_new_turn(self, bot):
-        print(self.removed_players)
         self.kick_removed_players(bot)
         for player_id in self.removed_players:
             if player_id in self.players.keys():
@@ -99,6 +106,7 @@ class Game:
         self.vote_time = False
         for player in self.players.values():
             player.send_sold_cards_message(bot, self)
+            player.send_owner_cards_message(bot, self)
 
     def kick_removed_players(self, bot):
         for player_id in self.removed_players:
